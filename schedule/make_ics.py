@@ -170,8 +170,9 @@ def build_ics(events, start_date, weeks, calendar_name):
     seen = {}
 
     for ev in events:
-        anchor_wd = min(DAYS[d][0] for d in ev["days"])
-        day0 = first_occurrence(start_date, anchor_wd)
+        # первое событие — ближайший подходящий день, а не понедельник:
+        # иначе расписание, собранное в четверг, начнётся только со следующей недели
+        day0 = min(first_occurrence(start_date, DAYS[d][0]) for d in ev["days"])
         sh, sm = ev["start"]
         eh, em = ev["end"]
         dtstart = datetime(day0.year, day0.month, day0.day, sh, sm)
