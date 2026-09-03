@@ -164,6 +164,11 @@ def build_ics(events, start_date, weeks, calendar_name):
         f"X-WR-CALNAME:{escape(calendar_name)}",
     ]
 
+    # каждая пересборка файла должна иметь номер больше предыдущей,
+    # иначе календарь посчитает событие неизменившимся и не обновит его
+    sequence = int(datetime.now(timezone.utc).timestamp() // 60)
+    seen = {}
+
     for ev in events:
         anchor_wd = min(DAYS[d][0] for d in ev["days"])
         day0 = first_occurrence(start_date, anchor_wd)
@@ -174,8 +179,13 @@ def build_ics(events, start_date, weeks, calendar_name):
         if dtend <= dtstart:          # событие через полночь, например 23:00-01:00
             dtend += timedelta(days=1)
 
-        uid_src = f"{ev['title']}|{ev['days']}|{ev['start']}|{ev['end']}|{start_date}"
-        uid = hashlib.sha1(uid_src.encode("utf-8")).hexdigest()[:20]
+        # UID считаем только по названию: если позже поменять время или дни,
+        # телефон обновит уже существующее событие, а не создаст дубль.
+        key = ev["title"].strip().lower()
+        seen[key] = seen.get(key, 0) + 1
+        if seen[key] > 1:                 # два события с одинаковым названием
+            key = f"{key}#{seen[key]}"
+        uid = hashlib.sha1(key.encode("utf-8")).hexdigest()[:20]
 
         byday = ",".join(DAYS[d][1] for d in ev["days"])
         rrule = f"RRULE:FREQ=WEEKLY;BYDAY={byday}"
@@ -187,6 +197,8 @@ def build_ics(events, start_date, weeks, calendar_name):
             "BEGIN:VEVENT",
             f"UID:{uid}@raspisanie",
             f"DTSTAMP:{stamp}",
+            f"SEQUENCE:{sequence}",
+            f"LAST-MODIFIED:{stamp}",
             f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%S')}",
             f"DTEND:{dtend.strftime('%Y%m%dT%H%M%S')}",
             rrule,
